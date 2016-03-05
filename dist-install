@@ -1,0 +1,15 @@
+#!/bin/bash
+#Installation script without having to clone the repo
+
+echo -e "Getting 'ppa-tool' from gitub sources...\n"
+if [ -n "`echo $LANG | grep fr`" ] ; then #if language is french
+	sudo wget https://raw.githubusercontent.com/vankasteelj/ppa-tool/master/ppa-tool_FR -O /usr/bin/ppa-tool -q
+else #select english by default for unknow languages
+	sudo wget https://raw.githubusercontent.com/vankasteelj/ppa-tool/master/ppa-tool_EN -O /usr/bin/ppa-tool -q
+fi
+
+sudo chmod +x /usr/bin/ppa-tool 
+echo -e "Done. 'ppa-tool' installed.\n" 
+
+ppa-tool -v
+rm $0

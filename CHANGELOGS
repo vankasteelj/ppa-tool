@@ -1,0 +1,29 @@
+Changelogs 
+======
+
+2.1.0 
+- GIThub repository
+- New feature : --update
+- Completely rewritten with 'case' and functions
+- Translation open to external contributors
+
+2.0.1 
+- Code cleaned (-200 lines)
+- Script too heavy, multilingual feature removed temporarely - back to separate files
+
+1.9.9-beta  
+- script rewritten
+- beta for multilingual (en-fr)
+- use of function
+
+1.2.1 
+- add new option : check-release
+- new way to backup files
+- translated in English and French
+
+1.1.0 
+- add new options : add/remove/purge/list/backup
+- colorization
+
+1.0.0  
+- initial version for AskUbuntu : check the validity of a PPA

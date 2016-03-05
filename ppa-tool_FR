@@ -1,0 +1,348 @@
+#! /bin/bash
+# Script to help manage PPA in Ubuntu and derivatives.
+# Written by vankasteelj
+
+# Licence GNU-GPL 3.0 
+# https://www.gnu.org/licenses/gpl-3.0.html
+
+# Special Thanks : Wilf, Blade19899, stwissel, Tartampion91, lynn, metalux, 200_success
+# This script uses 'ppa-purge' by Lorenzo De Liso, it will be installed if needed. 
+
+# Version number is X.X.X (published version/feature added/minor revision)
+
+#Script
+SCRIPT="ppa-tool"
+VERSION="2.1.0" 
+DATE="2014-03-29"
+
+COLORNORMAL="\\033[0;39m" 
+COLORERROR="\\033[1;31m"
+COLOROK="\\033[0;32m"
+COLORREADABLE="\\033[0;36m"
+COLORITA="\\033[3;39m"
+
+[ -n "${1#ppa:}" ] && PPA=$1
+[ -n "${2#ppa:}" ] && PPA=$2
+
+BKPLIST="`echo $HOME`/BACKUP-`(date +%Y.%m.%d-%Hh%M)`.$SCRIPT"
+RELEASE="$(lsb_release -si) $(lsb_release -sr)"
+CURRENTRELEASE="$(lsb_release -sc)"
+CUSTOMRELEASE="${1#--chk-release=}"
+
+helpsection()
+{
+	echo -e "Usage : $SCRIPT [OPTION]... [PPA]...
+
+Permet de gérer les PPA sur votre système.
+	[PPA]   : ppa:user/directory
+	Exemple : "$COLORREADABLE"$SCRIPT --check ppa:libreoffice/ppa"$COLORNORMAL"
+
+Si [OPTION] est omis, seule la compatibilité '--check' de [PPA] sera vérifiée.
+
+"$COLOROK"Options disponibles:"$COLORNORMAL"
+ -h, --help	Affiche cette aide
+ -c, --check	Vérifier la compatibilité du [PPA] avec le système
+ -a, --add	Ajouter le [PPA] aux dépôts (implique -c, --check)
+ -r, --remove	Retirer le [PPA] des dépôts
+ -p, --purge	Purger le [PPA] et tous les paquets installés depuis celui-ci
+ -l, --list	Obtenir une liste de tous les PPA installés
+ -v, --version	Afficher la version du script
+ --update	Mettre à jour '$SCRIPT' à la version la plus récente
+
+"$COLOROK"Options avancées: BACKUP"$COLORNORMAL"
+ --bkp-list	Faire un backup de la liste des PPA dans le dossier personnel
+
+ --bkp-install	Restaurer des PPA depuis [FICHIER]
+	Usage : $SCRIPT [BKP-OPTION]... [FICHIER]...
+	Exemple : "$COLORREADABLE"$SCRIPT --bkp-install /home/user/BACKUP.$SCRIPT"$COLORNORMAL"	
+
+"$COLOROK"Options avancées: CHECK"$COLORNORMAL"
+ --chk-release=[VERSION]	Vérifier les PPA installés pour mise à niveau vers [VERSION]
+	Exemple : "$COLORREADABLE"$SCRIPT --chk-release=trusty"$COLORNORMAL"
+	=> La vérification portera sur l'ensemble des PPA déjà installés.
+
+ --chk-release=[VERSION]... [PPA]...	Vérifier [PPA] pour [VERSION]
+	Exemple : "$COLORREADABLE"$SCRIPT --chk-release=trusty ppa:libreoffice/ppa"$COLORNORMAL"
+	=> La vérification sera théorique : [PPA] est-il compatible [VERSION] ? 
+
+"$COLORITA"NOTE: les opérations sur plusieurs PPA en même temps ne sont pas implémentées."$COLORNORMAL"
+--------
+Désinstallation: « "$COLORREADABLE"sudo rm /usr/bin/$SCRIPT "$COLORNORMAL"»
+Visitez "$COLOROK"http://forum.ubuntu-fr.org"$COLORNORMAL" pour toute question. 
+Version $VERSION, $DATE - Script de vankasteelj."
+	exit 0
+}
+
+##  FUNCTIONS   ##
+
+error() 
+{ 
+	case "$1" in
+	 connection) 
+		local errortype="E : Impossible de joindre le serveur. Vérifiez votre connexion Internet."
+		;;
+	 root) 
+		local errortype="E : Impossible d'effectuer cette commande en tant que 'su' ou 'root'."
+		;;
+	 syntax)	
+		local errortype="E : Problème de syntaxe."
+		;;
+	 option)
+		local errortype="E : Option inconnue."
+		;;
+	 ignored)
+		echo -e "$SCRIPT : ""$COLORERROR""$2""$COLORNORMAL"" ignoré(s), aucun argument n'est accepté pour '--list' ou '--bkp-list'\n"
+		return 1
+		;;
+	 toomany)
+		local errortype="E : Trop d'options utilisées."
+	esac
+	echo -e "$SCRIPT - "$COLORERROR"Oups, une erreur est survenue."$COLORNORMAL"
+$errortype
+
+Usage: $SCRIPT [OPTION]... [PPA]...
+Essayez « "$COLOROK"$SCRIPT --help"$COLORNORMAL" » pour plus d'informations." 
+	exit 0
+}
+
+success()
+{
+	case "$1" in
+	 removed)
+		local message="'$PPA' supprimé."
+		;;
+	 added)
+		local message="'$PPA' ajouté."
+		;;
+	esac
+	echo -e "... OK ! $message"
+}
+
+update()
+{
+	local url="https://raw.githubusercontent.com/vankasteelj/ppa-tool/master/dist-install"
+	wget "$url" -q -O /tmp/"$SCRIPT"-update
+		case $? in 
+			0)
+				bash /tmp/"$SCRIPT"-update
+				;;
+			*)
+				error connection
+				;;
+		esac
+	rm /tmp/"$SCRIPT"-update
+	exit 0
+}
+
+ppa_verification()
+{
+	local ppa="${PPA#ppa:}"
+	local codename="$(lsb_release -sc)"
+	local release="$RELEASE"
+	[ -n "$1" ] && local codename="${1#--chk-release=}" && local release="$codename"
+	local url="http://ppa.launchpad.net/$ppa/ubuntu/dists/$codename/"
+
+	wget "$url" -q -O /dev/null
+    		case $? in
+      			0) # Success
+        			echo "$SCRIPT : '$ppa' est disponible pour $release" && INSTALLABLE=1
+        			;;
+      			8) # HTTP 404 (Not Found) would result in wget returning 8
+        			echo "$SCRIPT : '$ppa' n'est PAS disponible pour $release"
+        			;;
+      			*)
+        			error connection
+				;;
+    		esac
+}
+
+ppa_add() 
+{ 
+	[ "$INSTALLABLE" != "1" ] && exit 0 
+	echo -e "\n- Installation en cours..." && sudo add-apt-repository $PPA -y 
+	echo -e "\n- Mise à jour de la liste des paquets..." && sudo apt-get update > /dev/null 2>&1 && success added
+	exit 0
+}
+
+ppa_remove()
+{
+	 echo -e "\n- Désinstallation en cours..." && sudo add-apt-repository -r $PPA -y > /dev/null 2>&1 
+	 echo -e "\n- Mise à jour de la liste des paquets..." && sudo apt-get update > /dev/null 2>&1 && success removed
+	 exit 0
+}
+
+ppa_purge()
+{
+	case $1 in
+	 purge)
+		read -p "Voulez-vous purger '$PPA' de votre système et désinstaller tous les paquets installés depuis ce dépôt - Les paquets nécessaires au bon fonctionnement du système seront automatiquement réinstallés depuis les dépôts officiels (o/n)? : "
+		[ "$REPLY" != "o" ] && exit 0
+		sudo ppa-purge "$PPA" && sudo apt-get autoremove -y
+		;;
+	 needed)
+		echo -e "$COLORERROR""Erreur: ""$COLORNORMAL""'ppa-purge' n'est pas installé.\nCe paquet est nécessaire pour l'utilisation de la fonction '--purge'\n"
+		read -p "Voulez-vous installer 'ppa-purge' sur votre système (o/n)? : "
+		[ "$REPLY" != "o" ] && exit 0 
+		echo -e "\n- Installation en cours..." && sudo apt-get install ppa-purge -y > /dev/null 2>&1 && success && "$SCRIPT $OPTIONS"
+		;;
+	esac
+	exit 0
+}
+
+ppa_list()
+{
+	[ "$1" == "save" ] && [ "$USER" == "root" ] && error root #do not save files in /root directory
+	echo "### BACKUP '$SCRIPT' ###" | tee -a /tmp/"$SCRIPT"-list.tmp > /dev/null 2>&1
+
+	for APT in `find /etc/apt/ -name \*.list`; do
+    		grep -o "^deb http://ppa.launchpad.net/[a-z0-9\-]\+/[a-z0-9\-]\+" $APT | while read ENTRY ; do
+        		PPAOWNER=`echo $ENTRY | cut -d/ -f4`
+      	  		PPANAME=`echo $ENTRY | cut -d/ -f5`
+			echo "ppa:$PPAOWNER/$PPANAME" | tee -a /tmp/"$SCRIPT"-list.tmp
+    		done
+	done
+
+	[ "$1" == "save" ] && cp /tmp/"$SCRIPT"-list.tmp "$BKPLIST" && echo -e "\nFichier '"$COLOROK"$BKPLIST"$COLORNORMAL"' sauvegardé."
+	rm /tmp/"$SCRIPT"-list.tmp
+	exit 0
+}
+
+backup_install()
+{
+	local bkplogs="$(date +%d/%m/%Y)-$(date +%H:%M)"
+	local bkpfile="$1"
+
+	echo -e "$SCRIPT : Installation des PPA depuis le backup '$bkpfile'
+Cette opération peut prendre un certain temps... Veuillez patienter." 
+
+	while read LINE ; do
+	 if [[ -n "`echo $LINE | grep 'ppa:'`" ]] ; then
+		local ppa="${LINE#ppa:}"
+		local codename="$(lsb_release -sc)"
+		local release="$RELEASE"
+		local url="http://ppa.launchpad.net/$ppa/ubuntu/dists/$codename/"
+	  	wget "$url" -q -O /dev/null
+    			case $? in
+      			 0) # Success
+        			echo -e "$COLOROK" && echo -e "- ### INSTALLATION : '$LINE' ###" | tee -a /tmp/"$SCRIPT"-backup.log && echo -e "$COLORNORMAL"
+				sudo add-apt-repository -y $LINE | tee -a /tmp/"$SCRIPT"-backup.log
+        			;;
+      			 8) # HTTP 404 (Not Found) would result in wget returning 8
+        			echo -e "$COLORERROR" && echo -e "- ### !!! ATTENTION !!! '$LINE' invalide pour $RELEASE : installation échouée. ###" | tee -a /tmp/$SCRIPT-backup.log && echo -e "$COLORNORMAL"
+        			;;
+      			 *)
+        			error connection
+				;;
+    			esac
+	 fi
+	done < $bkpfile
+	echo -e "- ### M-A-J de la liste des paquets ###" | tee -a /tmp/"$SCRIPT"-backup.log > /dev/null 2>&1 
+	echo -e "\n- Mise à jour de la liste des paquets..." && sudo apt-get update | tee -a /tmp/"$SCRIPT"-backup.log > /dev/null 2>&1
+	echo -e "\n... OK ! PPA réinstallés."
+	read -p "Consulter le fichier log (o/n)? "
+	[ "$REPLY" != "o" ] && exit 0 
+	echo -e "\n-----\n"$COLOROK"Logs : $bkplogs"$COLORNORMAL"" && xdg-open /tmp/"$SCRIPT"-backup.log
+	exit 0
+}
+
+custom_full_verification()
+{
+	"$SCRIPT" --list > /tmp/"$SCRIPT"-check_release.tmp
+	echo -e "$SCRIPT: Procédure de vérification des dépôts en vue d'un changement de version\n\nSystème actuel:	$CURRENTRELEASE\nCompatibilité :	$CUSTOMRELEASE\n\n- Vérification en cours...\n"
+	> /tmp/"$SCRIPT"-unwanted.tmp > /dev/null 2>&1 #empty temp file
+
+	while read LINE ; do 
+		local ppa="${LINE#ppa:}"
+		local codename="$CUSTOMRELEASE"
+		local url="http://ppa.launchpad.net/$ppa/ubuntu/dists/$codename/"
+
+		wget "$url" -q -O /dev/null
+    		case $? in
+      			0) # Success
+        			echo -e "$LINE\n"$COLOROK"=>	compatible $codename"$COLORNORMAL""
+        			;;
+      			8) # HTTP 404 (Not Found) would result in wget returning 8
+        			echo -e "$LINE\n"$COLORERROR"=>	incompatible $codename"$COLORNORMAL""
+				echo $LINE | tee -a /tmp/"$SCRIPT-unwanted".tmp > /dev/null 2>&1 #save a list of incompatible ppa's
+        			;;
+      			*)
+        			error connection
+				;;
+    		esac
+	done < /tmp/"$SCRIPT"-check_release.tmp
+	echo ""
+	if [[ -n "`cat /tmp/$SCRIPT-unwanted.tmp`" ]] ; then #check the list of incompatible ppa's
+		echo -e "En cas de mise à jour vers '$CUSTOMRELEASE', les PPA suivant seront incompatibles :"
+		cat /tmp/$SCRIPT-unwanted.tmp
+	else
+		echo -e "Aucun PPA incompatible '$codename' : vous pouvez procéder au changement de version."
+	fi
+	rm /tmp/$SCRIPT-unwanted.tmp > /dev/null 2>&1 ; rm /tmp/$SCRIPT-check_release.tmp > /dev/null 2>&1 
+	echo -e "$COLORITA""\nNote: En cas de changement de version, tous les PPA sont désactivés. Vous pourrez réinstaller les PPA compatibles à partir d'un fichier de sauvegarde en utilisant la commande: "$COLORREADABLE"$SCRIPT --bkp-install [Fichier]\n""$COLORNORMAL"
+		read -p "- Procéder à un backup (o/n)? "
+			[ "$REPLY" == "o" ] && "$SCRIPT" --bkp-list
+}
+
+#check for too many options/arguments
+[ -n "$3" ] && error toomany
+
+case $1 in
+	-h|--help)
+		helpsection
+		;;
+	-v|--version)
+		echo "$SCRIPT : $VERSION ($DATE)" && exit 0
+		;;
+	-c|--check|check)
+		[ -z "$2" ] || [ -z "${2#ppa:}" ] && error syntax
+		ppa_verification && exit 0
+		;;
+	-a|--add|add)
+		[ -z "$2" ] || [ -z "${2#ppa:}" ] && error syntax 
+		ppa_verification && ppa_add
+		;;
+	-r|--remove|remove)
+		[ -z "$2" ] || [ -z "${2#ppa:}" ] && error syntax 
+		ppa_remove
+		;;
+	-p|--purge|purge)
+		if [[ -n "`echo $2`" ]] ; then
+			[ -n "`dpkg -l | grep ppa-purge`" ] && ppa_purge purge
+			OPTIONS="$1 $2"
+			ppa_purge needed #if ppa-purge isn't installed
+		else
+			error syntax
+		fi
+		exit 0
+		;;	
+	-l|--list|list|--bkp-list)
+		[ -n "$2" ] && error ignored "$2"
+		[ "$1" == "--bkp-list" ] && ppa_list save
+		ppa_list
+		;;
+
+	--bkp-install)
+		[ -z "$2" ] && error syntax
+		backup_install "$2"
+		;;
+	--chk-release=*)
+ 		if [[ -n "`echo $2 | grep ppa`" ]] ; then #if ppa entered, check the ppa
+			ppa_verification "$1"
+		else #if no ppa entered, check entire system
+			[ -n "$2" ] && error syntax
+			custom_full_verification
+ 		fi
+ 		exit 0
+		;;
+	ppa:*)
+		ppa_verification && exit 0
+		;;
+	--update)
+		update
+		;;
+	*)
+		error option
+		;;
+esac
+
+error syntax

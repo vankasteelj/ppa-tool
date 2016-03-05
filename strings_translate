@@ -1,0 +1,121 @@
+- Your name :
+- Your language :
+- The output of 'echo $LANG' :
+- Your email :
+
+Now, make the translation of the following lines :
+
+###helpsection###
+
+Usage : $SCRIPT [OPTION]... [PPA]...
+
+Handles the PPA's on the system.
+	[PPA]   : ppa:user/directory
+	Example : $SCRIPT --check ppa:libreoffice/ppa
+
+If [OPTION] is ommited, only the compatibility '--check' for [PPA] will be checked.
+
+Available options:
+ -h, --help	Print this help
+ -c, --check	Check the [PPA] compatibility with the system
+ -a, --add	Add [PPA] to repositories (implies -c, --check)
+ -r, --remove	Remove [PPA] from repositories
+ -p, --purge	Purge [PPA] and all installed packages coming from there
+ -l, --list	Get a list of all installed PPA's
+ -v, --version	Print the script's version number
+  --update	Update '$SCRIPT' to the most recent version
+
+Advanced options: BACKUP
+ --bkp-list	Make a backup of all installed PPA's in HOME
+
+ --bkp-install	Restore PPA from [FILE]
+	Usage : $SCRIPT [BKP-OPTION]... [FILE]...
+	Example : $SCRIPT --bkp-install /home/user/BACKUP.$SCRIPT
+
+Advanced options: CHECK
+ --chk-release=[VERSION]	Check the installed PPA's for an upgrade to [VERSION]
+	Example : $SCRIPT --chk-release=trusty
+	=> All installed PPA's will be checked.
+
+ --chk-release=[VERSION]... [PPA]...	Check [PPA] compatibility with [VERSION]
+	Example : $SCRIPT --chk-release=trusty ppa:libreoffice/ppa
+	=> A fake check : is [PPA] compatible with [VERSION] ? 
+
+NOTE: multiples PPA's aren't implemented.
+--------
+Uninstallation:
+Version $VERSION, $DATE - Script written by vankasteelj.
+
+###error### 
+E : Unable to join the server. Please check your Internet connection.
+E : Unable to perform as 'su' or 'root'.
+E : Syntax error.
+E : Unknown option.
+
+"$2" ignored, '--list' and '--bkp-list' don't accept arguments\n
+
+E : Too many options.
+
+Oops, something went wrong.
+
+Usage: $SCRIPT [OPTION]... [PPA]...
+Try « $SCRIPT --help » for more information.
+
+'$PPA' removed.
+'$PPA' added.
+
+... OK !
+
+###ppa_verification###
+'$ppa' is available for $release
+'$ppa' is NOT available for $release
+
+###ppa_add###
+- Installing...
+- Updating package list...
+
+###ppa_remove###
+- Uninstalling...
+
+###ppa_purge###
+Do you want to purge '$PPA' and uninstall all packages installed from it - All critical packages required by the system will be automatically reinstalled from the official repositories (y/n)? : "
+
+Error: 'ppa-purge' wasn't found.
+This package is required for the '--purge' feature
+
+Do you wish to install 'ppa-purge' (y/n)? : 
+
+- Installing...
+
+###ppa_list###
+File saved.
+
+
+###backup_install###
+Installing new repositories from backup file
+This may take a while... Please wait.
+
+!!! WARNING !!! '$LINE' unavailable for $RELEASE : installation aborted.
+- Updating package list...
+... OK ! Repositories reinstalled.
+
+Read the log file (y/n)? 
+
+###custom_full_verification###
+Checking repositories for an entire system-upgrade.
+Current:	
+Wanted :
+
+- Checking..."
+=>	compatible
+=>	incompatible
+
+In case of upgrade to '$CUSTOMRELEASE', the following PPA's will become unavailable :
+
+No '$codename'-incompatible repositories found : you can proceed to an upgrade.
+
+Note: In case of upgrade, all PPA's will be desactivated. You will be able to reinstall the available PPA's from a backup file, using: 
+
+- File
+
+- Make a backup (y/n)? 

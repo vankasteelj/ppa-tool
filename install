@@ -1,0 +1,17 @@
+#!/bin/bash
+#Installation script
+#Launch with 'bash install' and you're good to go.
+
+echo -e "Installing 'ppa-tool'...\n"
+if [ -n "`echo $LANG | grep fr`" ] ; then #if language is french
+	sudo cp ppa-tool_FR /usr/bin/ppa-tool
+else #select english by default for unknow languages
+	sudo cp ppa-tool_EN /usr/bin/ppa-tool
+fi
+
+sudo chmod +x /usr/bin/ppa-tool 
+echo -e "Done..." 
+
+ppa-tool -v
+
+exit 0
